@@ -1,13 +1,14 @@
 import { PassThrough } from "node:stream";
 import { spawn } from "node:child_process";
 import path from "node:path";
+import fs from "node:fs";
 
 import _ from "lodash";
 import { decode } from "html-entities";
 import moment from "moment";
 import sider from "@lis355/sider";
 import xml2js from "xml2js";
-import ytdl from "ytdl-core";
+import ytdl from "../libs/node-ytdl-core/lib/index.js";
 
 import ApplicationComponent from "./app/ApplicationComponent.js";
 
@@ -77,6 +78,16 @@ export default class YouTubeDownloader extends ApplicationComponent {
 					}
 				};
 
+				page.network.responseHandler = async params => {
+					const url = new URL(params.request.url);
+					console.log(url.host + url.pathname);
+					if (url.href.includes("youtube.com/watch")) {
+						const buf = await page.network.getResponseBody(params.requestId);
+
+						fs.writeFileSync("./temp/response.html", buf, "utf8");
+					}
+				};
+
 				return resolve(page);
 			});
 		});
@@ -88,6 +99,13 @@ export default class YouTubeDownloader extends ApplicationComponent {
 
 	async run() {
 		await super.run();
+
+		const info = await this.getInfo(this.parseYouTubeId("https://www.youtube.com/watch?v=qyEe0l5x0TA"));
+
+		fs.writeFileSync("./temp/infov.json", JSON.stringify(info, null, "\t"), "utf8");
+		// const info = JSON.parse(fs.readFileSync("./temp/infov.json").toString());
+
+		await this.downloadYouTubeAudioFromVideo(info);
 	}
 
 	parseYouTubeId(text) {
@@ -111,7 +129,7 @@ export default class YouTubeDownloader extends ApplicationComponent {
 			requestOptions: {
 				headers: {
 					cookie: this.cookiesString,
-					YOUTUBE_ID_TOKEN_HEADER: this.idTokenHeader
+					// YOUTUBE_ID_TOKEN_HEADER: this.idTokenHeader
 				}
 			}
 		});
